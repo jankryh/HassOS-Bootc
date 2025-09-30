@@ -1,0 +1,3 @@
+---
+# ZeroTier configuration
+zerotier_network_id: "YOUR_NETWORK_ID"  # Replace with your actual network ID

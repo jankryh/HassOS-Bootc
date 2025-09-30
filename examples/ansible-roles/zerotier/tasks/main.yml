@@ -1,0 +1,17 @@
+---
+- name: Install ZeroTier
+  dnf:
+    name: zerotier-one
+    state: present
+
+- name: Start and enable ZeroTier
+  systemd:
+    name: zerotier-one
+    state: started
+    enabled: yes
+
+- name: Join ZeroTier network
+  command: zerotier-cli join {{ zerotier_network_id }}
+  register: join_result
+  failed_when: join_result.rc != 0 and "already a member" not in join_result.stderr
+  when: zerotier_network_id is defined

@@ -1,0 +1,16 @@
+[Unit]
+Description=Zigbee2MQTT
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --rm --name zigbee2mqtt \
+  --device={{ zigbee_device }} \
+  -v /var/lib/zigbee2mqtt:/app/data \
+  --network host \
+  koenkk/zigbee2mqtt:latest
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
