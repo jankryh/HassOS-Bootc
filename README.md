@@ -2,52 +2,346 @@
 
 **Home Assistant, Container-Native** 🏠
 
-HassOS-Bootc assembles a Fedora bootable container image that ships Home Assistant, linux-system-roles integration, and Day 2 health checks managed by Greenboot. This immutable, container-native approach provides a modern alternative to traditional Home Assistant OS deployments, optimized for bare-metal installation via bootc.
+HassOS-Bootc is a modern, immutable Home Assistant deployment solution built on Fedora's bootc technology. It provides a container-native approach to running Home Assistant on bare metal hardware, combining the reliability of immutable systems with the flexibility of containerized applications.
 
-## Quick Start
+## 🎯 What Makes HassOS-Bootc Different?
+
+### Traditional Home Assistant OS vs HassOS-Bootc
+
+| Feature | Traditional HassOS | HassOS-Bootc |
+|---------|-------------------|--------------|
+| **Base OS** | Custom Linux | Fedora (upstream) |
+| **Update Model** | Full OS updates | Container-based updates |
+| **Immutable** | ✅ | ✅ |
+| **Container Runtime** | Docker | Podman |
+| **Configuration** | HassOS-specific | Ansible + systemd |
+| **Health Checks** | HassOS supervisor | Greenboot |
+| **Deployment** | HassOS installer | bootc installer |
+
+### Key Benefits
+
+- 🐳 **Container-Native**: Built for the container era with Podman
+- 🔒 **Immutable**: System integrity through read-only root filesystem
+- ⚡ **Fast Updates**: Update only the Home Assistant container, not the entire OS
+- 🛡️ **Secure**: Fedora's security model with SELinux and system hardening
+- 🔄 **Auto-Recovery**: Greenboot health checks with automatic rollback
+- 📦 **Standard Tools**: Uses familiar Linux tools and Ansible for configuration
+
+## 🏗️ How HassOS-Bootc Works
+
+### Architecture Overview
+
+HassOS-Bootc follows a layered architecture that separates concerns and ensures reliability:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Hardware Layer                           │
+├─────────────────────────────────────────────────────────────┤
+│                 Fedora bootc Base                           │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │
+│  │   Immutable     │  │   Container     │  │  Health     │ │
+│  │   Root FS       │  │   Runtime       │  │  Monitoring │ │
+│  │   (read-only)   │  │   (Podman)      │  │  (Greenboot)│ │
+│  └─────────────────┘  └─────────────────┘  └─────────────┘ │
+├─────────────────────────────────────────────────────────────┤
+│              Home Assistant Container                       │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  Home Assistant Core + Add-ons + Configuration         │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Core Components
+
+#### 1. **Fedora bootc Base**
+- **Immutable Root**: The entire root filesystem is read-only
+- **Atomic Updates**: System updates are atomic - either complete success or complete rollback
+- **Bootc Integration**: Uses Fedora's bootc for container-to-OS conversion
+
+#### 2. **Container Runtime (Podman)**
+- **Rootless Containers**: Runs containers without root privileges
+- **Systemd Integration**: Containers managed as systemd services
+- **Auto-Update**: Containers can be updated independently of the OS
+
+#### 3. **Configuration Management (Ansible)**
+- **Idempotent**: Configuration can be applied multiple times safely
+- **Declarative**: Describes desired state, not how to achieve it
+- **Version Controlled**: All configuration is stored in Git
+
+#### 4. **Health Monitoring (Greenboot)**
+- **Boot Health Checks**: Verifies system health during boot
+- **Automatic Rollback**: Reverts to previous version if health checks fail
+- **Service Monitoring**: Ensures Home Assistant is running correctly
+
+### Build Process Explained
+
+```mermaid
+graph TD
+    A[Fedora bootc Base] --> B[Install Dependencies]
+    B --> C[Install Home Assistant]
+    C --> D[Apply Ansible Configuration]
+    D --> E[Setup Greenboot Health Checks]
+    E --> F[Enable Services]
+    F --> G[Create Container Image]
+    G --> H[Generate ISO/QCOW2]
+```
+
+#### Step-by-Step Build Process:
+
+1. **Base Image**: Start with `quay.io/fedora/fedora-bootc:42`
+2. **Dependencies**: Install Python, Podman, Ansible, and build tools
+3. **Home Assistant**: Install Home Assistant via pip
+4. **Configuration**: Apply Ansible playbooks to configure the system
+5. **Health Checks**: Deploy Greenboot scripts for monitoring
+6. **Services**: Enable Home Assistant as a systemd service
+7. **Image Creation**: Build the final container image
+8. **Deployment**: Generate ISO or QCOW2 for installation
+
+### Runtime Operation
+
+#### Boot Sequence:
+1. **System Boot**: Fedora bootc initializes the immutable root
+2. **Health Checks**: Greenboot runs pre-boot health checks
+3. **Service Start**: systemd starts the Home Assistant container
+4. **Health Verification**: Post-boot health checks ensure everything is working
+5. **Ready**: Home Assistant is accessible on port 8123
+
+#### Update Process:
+1. **Container Update**: New Home Assistant container is pulled
+2. **Health Check**: System verifies the new container is healthy
+3. **Service Restart**: Home Assistant service restarts with new container
+4. **Verification**: Health checks confirm the update was successful
+5. **Rollback**: If health checks fail, system automatically reverts
+
+## 🚀 Quick Start
 
 ### Prerequisites
 - Podman 4.0+ installed
 - Ansible Core 2.12+ (for validation)
-- bootc CLI (for ISO generation)
+- bootc-image-builder (for ISO generation)
 
 ### Build Process
 ```bash
-# 1. Generate dependency hints
-./build/generate-bindep.sh > bindep.txt
+# 1. Build the container image
+make build
 
-# 2. Build the container image
-podman build -t homeassistant-bootc:dev .
+# 2. Run comprehensive tests
+make test
 
-# 3. Run comprehensive tests
-./tests/build-test.sh homeassistant-bootc:dev
+# 3. Generate bootable ISO
+make iso
 
-# 4. Validate Ansible configuration
-./tests/validate-ansible.sh
-
-# 5. Create a bootable ISO (optional)
-bootc image build --target-arch=x86_64 --ref quay.io/yourrepo/homeassistant-bootc --output iso=out/homeassistant.iso .
+# 4. Generate QCOW2 for VMs
+make qcow2
 ```
 
 ### Quick Validation
 ```bash
 # Smoke test the built image
-./tests/smoke-test.sh homeassistant-bootc:dev
+make smoke-test
 
 # Check bootc metadata
-podman run --rm --privileged homeassistant-bootc:dev bootc status
+podman run --rm --privileged hassos-bootc:dev bootc status
 
 # Verify Home Assistant service
-podman run --rm homeassistant-bootc:dev /usr/bin/systemctl status home-assistant
+podman run --rm hassos-bootc:dev /usr/bin/systemctl status home-assistant
 ```
 
-## Configuration Overview
+### Available Make Targets
+```bash
+make help              # Show all available targets
+make build             # Build the container image
+make test              # Run all tests
+make iso               # Generate bootable ISO
+make qcow2             # Generate QCOW2 for VMs
+make iso-arm64         # Generate ARM64 ISO for Raspberry Pi
+make images            # Generate all image formats
+make clean             # Clean build artifacts
+make validate          # Run validation checks
+```
 
-### Architecture
-- **Containerfile**: Multi-stage build using Fedora bootc base image
-- **Ansible**: Configuration management via `ansible/playbooks/site.yml`
-- **Systemd**: Service management via `containers-systemd/home-assistant.service`
-- **Greenboot**: Health monitoring via `greenboot/check/` scripts
+## 📁 Project Structure
+
+```
+hassos-bootc/
+├── Containerfile              # Multi-stage container build definition
+├── Makefile                   # Build automation and targets
+├── bindep.txt                 # System package dependencies
+├── ansible/                   # Configuration management
+│   ├── playbooks/site.yml     # Main Ansible playbook
+│   └── roles/homeassistant.bootstrap/  # Home Assistant setup role
+├── containers-systemd/        # Systemd service definitions
+│   └── home-assistant.service # Home Assistant container service
+├── greenboot/                 # Health monitoring scripts
+│   └── check/                 # Boot and runtime health checks
+├── tests/                     # Testing and validation scripts
+├── build/                     # Build helper scripts
+└── docs/                      # Documentation
+```
+
+## ⚙️ Technical Details
+
+### Containerfile Architecture
+
+The `Containerfile` uses a multi-stage build approach:
+
+```dockerfile
+# Stage 1: Ansible preparation
+FROM quay.io/fedora/fedora-bootc:42 AS ansible-stage
+RUN dnf -y install ansible-core linux-system-roles
+
+# Stage 2: Main image build
+FROM quay.io/fedora/fedora-bootc:42
+RUN dnf -y install python3-pip podman ansible-core greenboot systemd-udev gcc python3-devel
+RUN pip3 install --no-cache-dir homeassistant
+RUN dnf -y remove gcc python3-devel  # Clean up build dependencies
+```
+
+### Ansible Configuration
+
+The Ansible playbook (`ansible/playbooks/site.yml`) handles:
+
+- **Directory Creation**: Sets up Home Assistant data and config directories
+- **Service Configuration**: Installs and configures the systemd service
+- **Environment Setup**: Configures Home Assistant environment variables
+- **Permissions**: Sets proper file ownership and permissions
+
+### Systemd Integration
+
+Home Assistant runs as a systemd service with:
+
+- **Container Management**: Uses Podman to run the Home Assistant container
+- **Auto-restart**: Automatically restarts on failure
+- **Logging**: Integrated with systemd journal
+- **Dependencies**: Proper service dependencies and ordering
+
+### Greenboot Health Checks
+
+Two types of health checks ensure system reliability:
+
+#### Required Checks (`greenboot/check/required.d/`)
+- **10-home-assistant.sh**: Verifies Home Assistant is running and responding
+- **Hard Failures**: System will rollback if these checks fail
+
+#### Wanted Checks (`greenboot/check/wants.d/`)
+- **30-podman-network.sh**: Verifies container networking is working
+- **Soft Failures**: Logs issues but doesn't trigger rollback
+
+## 🚀 Deployment & Usage
+
+### Installation Methods
+
+#### 1. **ISO Installation (Bare Metal)**
+```bash
+# Generate bootable ISO
+make iso
+
+# Create bootable USB
+sudo dd if=out/hassos-bootc.iso of=/dev/sdX bs=4M status=progress
+
+# Boot from USB and follow installer
+```
+
+#### 2. **QCOW2 Installation (Virtual Machines)**
+```bash
+# Generate QCOW2 image
+make qcow2
+
+# Use with QEMU/KVM, VirtualBox, or VMware
+qemu-system-x86_64 -machine q35 -cpu host -m 2048 \
+  -drive file=out/hassos-bootc.qcow2,format=qcow2 \
+  -netdev user,id=net0,hostfwd=tcp::8123-:8123 \
+  -device e1000,netdev=net0
+```
+
+#### 3. **ARM64 Installation (Raspberry Pi)**
+```bash
+# Generate ARM64 ISO
+make iso-arm64
+
+# Flash to SD card for Raspberry Pi 4/5
+sudo dd if=out/hassos-bootc-arm64.iso of=/dev/mmcblk0 bs=4M status=progress
+```
+
+### Post-Installation
+
+After installation, Home Assistant will be available at:
+- **Web Interface**: `http://<device-ip>:8123`
+- **SSH Access**: `ssh root@<device-ip>` (if enabled)
+- **Service Management**: `systemctl status home-assistant`
+
+### System Management
+
+#### Update Home Assistant
+```bash
+# Update to latest container
+podman pull ghcr.io/home-assistant/home-assistant:stable
+systemctl restart home-assistant
+
+# Or use bootc for system updates
+bootc update --apply
+```
+
+#### Health Monitoring
+```bash
+# Check system health
+journalctl -u greenboot-healthcheck
+
+# View Home Assistant logs
+journalctl -u home-assistant -f
+
+# Manual health check
+/etc/greenboot/check/required.d/10-home-assistant.sh
+```
+
+#### Rollback (if needed)
+```bash
+# List available rollback targets
+bootc rollback --list
+
+# Rollback to previous version
+bootc rollback --target <previous-ref>
+```
+
+## 🎯 Why Choose HassOS-Bootc?
+
+### Advantages Over Traditional Home Assistant OS
+
+| Aspect | Traditional HassOS | HassOS-Bootc |
+|--------|-------------------|--------------|
+| **Base OS** | Custom, limited | Fedora (full Linux) |
+| **Package Management** | HassOS supervisor only | Standard dnf/rpm |
+| **System Access** | Limited | Full root access |
+| **Customization** | Add-ons only | Full system customization |
+| **Updates** | Full OS rebuild | Container updates |
+| **Debugging** | Limited tools | Full Linux toolchain |
+| **Backup** | HassOS snapshots | Standard Linux backup tools |
+| **Networking** | HassOS network | Standard NetworkManager |
+
+### Ideal Use Cases
+
+#### ✅ **Perfect For:**
+- **Power Users**: Who want full system control and customization
+- **Developers**: Who need debugging tools and system access
+- **Homelab Enthusiasts**: Who want to integrate with existing infrastructure
+- **Security-Conscious Users**: Who prefer immutable, auditable systems
+- **Edge Deployments**: Where reliability and automatic recovery are critical
+
+#### ❌ **Not Ideal For:**
+- **Beginners**: Who prefer the simplicity of traditional HassOS
+- **Users**: Who only need basic Home Assistant functionality
+- **Limited Hardware**: Systems with less than 2GB RAM or 8GB storage
+
+### Comparison with Other Solutions
+
+| Solution | Immutable | Container-Native | Auto-Recovery | Full Linux |
+|----------|-----------|------------------|---------------|------------|
+| **HassOS-Bootc** | ✅ | ✅ | ✅ | ✅ |
+| **Traditional HassOS** | ✅ | ❌ | ✅ | ❌ |
+| **Home Assistant Container** | ❌ | ✅ | ❌ | ✅ |
+| **Home Assistant Core** | ❌ | ❌ | ❌ | ✅ |
+
+## 🔧 Configuration Overview
 
 ### Key Components
 - **Home Assistant**: Containerized using official image `ghcr.io/home-assistant/home-assistant:stable`
