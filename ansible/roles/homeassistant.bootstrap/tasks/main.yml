@@ -1,0 +1,49 @@
+---
+- name: Ensure Home Assistant directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /var/lib/home-assistant, mode: "0750" }
+    - { path: /etc/home-assistant, mode: "0750" }
+
+- name: Deploy default configuration
+  ansible.builtin.copy:
+    dest: /var/lib/home-assistant/configuration.yaml
+    mode: "0640"
+    owner: root
+    group: root
+    content: |
+      default_config: {}
+      http:
+        server_port: 8123
+
+- name: Install environment file for Home Assistant
+  ansible.builtin.template:
+    src: home-assistant.env.j2
+    dest: /etc/home-assistant/home-assistant.env
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Install Home Assistant systemd unit
+  ansible.builtin.template:
+    src: home-assistant.service
+    dest: /usr/lib/systemd/system/home-assistant.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  ignore_errors: true
+
+- name: Enable Home Assistant service
+  ansible.builtin.systemd:
+    name: home-assistant.service
+    enabled: true
+  ignore_errors: true

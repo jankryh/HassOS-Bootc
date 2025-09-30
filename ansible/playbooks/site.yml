@@ -1,0 +1,6 @@
+---
+- name: Configure Home Assistant bootc image
+  hosts: all
+  become: true
+  roles:
+    - role: homeassistant.bootstrap

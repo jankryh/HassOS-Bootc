@@ -1,0 +1,28 @@
+[Unit]
+Description=Home Assistant (Podman)
+After=network-online.target podman.service
+Wants=network-online.target
+
+[Service]
+Environment=HA_IMAGE=ghcr.io/home-assistant/home-assistant:stable
+EnvironmentFile=-/etc/home-assistant/home-assistant.env
+ExecStartPre=/usr/bin/podman pull ${HA_IMAGE}
+ExecStartPre=/usr/bin/podman stop home-assistant || true
+ExecStartPre=/usr/bin/podman rm home-assistant || true
+ExecStart=/usr/bin/podman run \
+  --name home-assistant \
+  --replace \
+  --network host \
+  --volume /var/lib/home-assistant:/config:Z \
+  --env-file /etc/home-assistant/home-assistant.env \
+  --label io.containers.autoupdate=image \
+  ${HA_IMAGE}
+ExecStop=/usr/bin/podman stop home-assistant
+ExecStopPost=/usr/bin/podman rm home-assistant
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=70
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

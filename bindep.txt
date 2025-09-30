@@ -1,0 +1,11 @@
+# Packages required during image build or runtime for the Home Assistant bootc image
+python3-pip
+ansible-core
+linux-system-roles
+podman
+systemd
+systemd-udev
+greenboot
+# Build dependencies (installed temporarily during pip install, then removed)
+gcc
+python3-devel
