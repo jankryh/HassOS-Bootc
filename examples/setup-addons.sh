@@ -31,6 +31,9 @@ install_addon() {
         "grafana")
             ./setup-grafana.sh
             ;;
+        "hacs")
+            ./setup-hacs.sh
+            ;;
         *)
             echo "Unknown add-on: $addon"
             exit 1
@@ -45,9 +48,10 @@ echo "2. MQTT Broker (Mosquitto)"
 echo "3. Zigbee2MQTT"
 echo "4. InfluxDB"
 echo "5. Grafana"
-echo "6. All add-ons"
+echo "6. HACS (Home Assistant Community Store)"
+echo "7. All add-ons"
 
-read -p "Select add-on (1-6): " choice
+read -p "Select add-on (1-7): " choice
 
 case $choice in
     1) install_addon "zerotier" ;;
@@ -55,12 +59,14 @@ case $choice in
     3) install_addon "zigbee2mqtt" ;;
     4) install_addon "influxdb" ;;
     5) install_addon "grafana" ;;
-    6) 
+    6) install_addon "hacs" ;;
+    7) 
         install_addon "zerotier"
         install_addon "mqtt"
         install_addon "zigbee2mqtt"
         install_addon "influxdb"
         install_addon "grafana"
+        install_addon "hacs"
         ;;
     *) echo "Invalid choice" && exit 1 ;;
 esac

@@ -570,6 +570,226 @@ systemctl daemon-reload
 systemctl enable --now grafana
 ```
 
+### Installing HACS (Home Assistant Community Store)
+
+HACS is the most popular way to extend Home Assistant with custom integrations, themes, and plugins.
+
+#### Method 1: Manual Installation
+
+```bash
+# Create custom components directory
+mkdir -p /var/lib/home-assistant/custom_components
+
+# Download and install HACS
+cd /var/lib/home-assistant/custom_components
+curl -fsSL https://get.hacs.xyz | bash -
+
+# Verify installation
+ls -la /var/lib/home-assistant/custom_components/hacs/
+```
+
+#### Method 2: Git Installation
+
+```bash
+# Create custom components directory
+mkdir -p /var/lib/home-assistant/custom_components
+
+# Clone HACS repository
+cd /var/lib/home-assistant/custom_components
+git clone https://github.com/hacs/integration.git hacs
+
+# Update to latest version
+cd hacs
+git pull origin main
+```
+
+#### Method 3: Automated Installation with Ansible
+
+Create an Ansible role for HACS installation:
+
+```bash
+# Create HACS role structure
+mkdir -p ansible/roles/hacs/{tasks,handlers,templates,vars}
+
+# Create main task file
+cat > ansible/roles/hacs/tasks/main.yml << 'EOF'
+---
+- name: Create custom components directory
+  file:
+    path: /var/lib/home-assistant/custom_components
+    state: directory
+    mode: '0755'
+
+- name: Download HACS
+  get_url:
+    url: https://github.com/hacs/integration/releases/latest/download/hacs.zip
+    dest: /tmp/hacs.zip
+    mode: '0644'
+
+- name: Extract HACS
+  unarchive:
+    src: /tmp/hacs.zip
+    dest: /var/lib/home-assistant/custom_components/
+    remote_src: yes
+    creates: /var/lib/home-assistant/custom_components/hacs
+
+- name: Set HACS permissions
+  file:
+    path: /var/lib/home-assistant/custom_components/hacs
+    state: directory
+    mode: '0755'
+    recurse: yes
+
+- name: Clean up temporary files
+  file:
+    path: /tmp/hacs.zip
+    state: absent
+EOF
+```
+
+#### Update Home Assistant Service for HACS
+
+```bash
+# Edit the systemd service to include custom components
+vim containers-systemd/home-assistant.service
+
+# Add these volume mounts:
+--volume /var/lib/home-assistant/custom_components:/config/custom_components:Z \
+--volume /var/lib/home-assistant/www:/config/www:Z \
+```
+
+#### HACS Configuration
+
+After installation, configure HACS in Home Assistant:
+
+1. **Restart Home Assistant:**
+```bash
+systemctl restart home-assistant
+```
+
+2. **Access HACS in Home Assistant:**
+   - Go to `http://<your-ip>:8123`
+   - Navigate to **Configuration** → **Integrations**
+   - Click **Add Integration**
+   - Search for **HACS**
+   - Follow the setup wizard
+
+3. **GitHub Token Setup (Required):**
+   - Go to [GitHub Personal Access Tokens](https://github.com/settings/tokens)
+   - Generate a new token with these scopes:
+     - `repo` (Full control of private repositories)
+     - `read:org` (Read org and team membership)
+   - Copy the token and use it during HACS setup
+
+#### Popular HACS Integrations
+
+Once HACS is installed, you can easily add popular integrations:
+
+```bash
+# Common HACS integrations to consider:
+# - Apple TV
+# - Google Home
+# - Spotify
+# - Ring
+# - Nest
+# - Tesla
+# - WeatherFlow
+# - Govee
+# - Tuya
+# - TP-Link Kasa
+```
+
+#### HACS Themes
+
+Install custom themes through HACS:
+
+1. In HACS, go to **Frontend** → **Themes**
+2. Browse and install themes like:
+   - **iOS Dark Mode**
+   - **Material Design**
+   - **Slate**
+   - **Clear**
+   - **Nord**
+
+#### HACS Custom Cards
+
+Add custom Lovelace cards:
+
+1. In HACS, go to **Frontend** → **Cards**
+2. Popular cards include:
+   - **Mini Graph Card**
+   - **Button Card**
+   - **Card Mod**
+   - **Auto Entities**
+   - **Bar Card**
+   - **Gauge Card**
+
+#### HACS Maintenance
+
+```bash
+# Update HACS manually
+cd /var/lib/home-assistant/custom_components/hacs
+git pull origin main
+
+# Or use the HACS web interface for updates
+# Go to HACS → Settings → Update All
+```
+
+#### Troubleshooting HACS
+
+```bash
+# Check HACS logs
+journalctl -u home-assistant -f | grep -i hacs
+
+# Verify HACS installation
+ls -la /var/lib/home-assistant/custom_components/hacs/
+
+# Check Home Assistant logs for HACS errors
+journalctl -u home-assistant -f | grep -i "custom_components.hacs"
+
+# Reset HACS (if needed)
+rm -rf /var/lib/home-assistant/custom_components/hacs
+# Then reinstall using one of the methods above
+```
+
+#### HACS with Custom Components Directory
+
+For better organization, you can use a dedicated directory:
+
+```bash
+# Create dedicated HACS directory
+mkdir -p /var/lib/home-assistant/hacs
+
+# Update systemd service
+vim containers-systemd/home-assistant.service
+
+# Add volume mount:
+--volume /var/lib/home-assistant/hacs:/config/custom_components/hacs:Z \
+```
+
+#### HACS Configuration File
+
+Create a HACS configuration file for advanced settings:
+
+```bash
+# Create HACS configuration
+cat > /var/lib/home-assistant/hacs_configuration.yaml << 'EOF'
+# HACS Configuration
+hacs:
+  # Enable experimental features
+  experimental: true
+  
+  # Set country for better repository access
+  country: "US"
+  
+  # Enable debug logging
+  debug: false
+  
+  # Set token (alternative to web setup)
+  token: "YOUR_GITHUB_TOKEN"
+EOF
+```
+
 ### Custom Home Assistant Configuration
 
 #### Environment Variables
@@ -587,10 +807,6 @@ TZ=America/New_York
 ```bash
 # Create custom components directory
 mkdir -p /var/lib/home-assistant/custom_components
-
-# Example: Install HACS (Home Assistant Community Store)
-cd /var/lib/home-assistant/custom_components
-git clone https://github.com/hacs/integration.git hacs
 
 # Update systemd service to mount custom components
 vim containers-systemd/home-assistant.service
@@ -778,6 +994,7 @@ vim ansible/playbooks/site.yml
   become: yes
   roles:
     - homeassistant.bootstrap
+    - hacs
     - zerotier
     - zigbee2mqtt
     - mosquitto

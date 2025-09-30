@@ -1,0 +1,4 @@
+---
+# HACS Configuration
+hacs_version: "latest"  # or specific version like "1.30.0"
+hacs_github_token: "YOUR_GITHUB_TOKEN"  # Optional: set during playbook run

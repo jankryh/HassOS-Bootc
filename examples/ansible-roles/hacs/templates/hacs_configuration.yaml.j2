@@ -1,0 +1,15 @@
+# HACS Configuration
+hacs:
+  # Enable experimental features
+  experimental: {{ hacs_experimental | default(false) }}
+  
+  # Set country for better repository access
+  country: "{{ hacs_country | default('US') }}"
+  
+  # Enable debug logging
+  debug: {{ hacs_debug | default(false) }}
+  
+  # Set token (alternative to web setup)
+  {% if hacs_github_token is defined and hacs_github_token != "YOUR_GITHUB_TOKEN" %}
+  token: "{{ hacs_github_token }}"
+  {% endif %}

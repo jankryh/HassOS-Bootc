@@ -1,0 +1,31 @@
+---
+- name: Create custom components directory
+  file:
+    path: /var/lib/home-assistant/custom_components
+    state: directory
+    mode: '0755'
+
+- name: Download HACS
+  get_url:
+    url: https://github.com/hacs/integration/releases/latest/download/hacs.zip
+    dest: /tmp/hacs.zip
+    mode: '0644'
+
+- name: Extract HACS
+  unarchive:
+    src: /tmp/hacs.zip
+    dest: /var/lib/home-assistant/custom_components/
+    remote_src: yes
+    creates: /var/lib/home-assistant/custom_components/hacs
+
+- name: Set HACS permissions
+  file:
+    path: /var/lib/home-assistant/custom_components/hacs
+    state: directory
+    mode: '0755'
+    recurse: yes
+
+- name: Clean up temporary files
+  file:
+    path: /tmp/hacs.zip
+    state: absent
