@@ -349,11 +349,230 @@ bootc rollback --target <previous-ref>
 - **linux-system-roles**: Ansible collection for system configuration
 - **Greenboot**: Health checks for Day 2 operations
 
-## Practical Examples
+## 🛠️ Practical Examples & Add-ons
+
+### Adding ZeroTier VPN
+
+ZeroTier provides secure remote access to your Home Assistant instance.
+
+#### Method 1: Install ZeroTier on the Host System
+
+```bash
+# Install ZeroTier on the host system
+dnf install zerotier-one
+
+# Start and enable ZeroTier
+systemctl enable --now zerotier-one
+
+# Join your ZeroTier network
+zerotier-cli join YOUR_NETWORK_ID
+
+# Check status
+zerotier-cli listnetworks
+```
+
+#### Method 2: Run ZeroTier in a Container
+
+Create a ZeroTier container service:
+
+```bash
+# Create ZeroTier service file
+cat > /etc/systemd/system/zerotier.service << 'EOF'
+[Unit]
+Description=ZeroTier One
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --rm --name zerotier \
+  --device=/dev/net/tun \
+  --net=host \
+  --cap-add=NET_ADMIN \
+  --cap-add=SYS_ADMIN \
+  -v /var/lib/zerotier-one:/var/lib/zerotier-one \
+  zerotier/zerotier:latest
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start the service
+systemctl daemon-reload
+systemctl enable --now zerotier
+
+# Join your network
+podman exec zerotier zerotier-cli join YOUR_NETWORK_ID
+```
+
+### Connecting Zigbee Sticks
+
+#### USB Zigbee Coordinator Setup
+
+1. **Identify your Zigbee stick:**
+```bash
+# List USB devices
+lsusb
+
+# Check for Zigbee devices (common examples)
+# - ConBee II: 1cf1:0030
+# - CC2531: 0451:16a8
+# - Sonoff Zigbee 3.0: 10c4:ea60
+```
+
+2. **Install ZHA (Zigbee Home Assistant) integration:**
+```bash
+# The ZHA integration is built into Home Assistant
+# No additional installation needed
+```
+
+3. **Configure USB device permissions:**
+```bash
+# Create udev rule for your Zigbee stick
+cat > /etc/udev/rules.d/99-zigbee.rules << 'EOF'
+# ConBee II
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1cf1", ATTRS{idProduct}=="0030", MODE="0666", GROUP="dialout"
+
+# CC2531
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0451", ATTRS{idProduct}=="16a8", MODE="0666", GROUP="dialout"
+
+# Sonoff Zigbee 3.0
+SUBSYSTEM=="usb", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE="0666", GROUP="dialout"
+EOF
+
+# Reload udev rules
+udevadm control --reload-rules
+udevadm trigger
+```
+
+4. **Update Home Assistant service to access USB devices:**
+```bash
+# Edit the systemd service to include USB device access
+vim containers-systemd/home-assistant.service
+
+# Add device mapping (example for ConBee II)
+--device=/dev/ttyACM0:/dev/ttyACM0 \
+```
+
+#### Zigbee2MQTT Alternative
+
+For advanced Zigbee management, use Zigbee2MQTT:
+
+```bash
+# Create Zigbee2MQTT service
+cat > /etc/systemd/system/zigbee2mqtt.service << 'EOF'
+[Unit]
+Description=Zigbee2MQTT
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --rm --name zigbee2mqtt \
+  --device=/dev/ttyACM0:/dev/ttyACM0 \
+  -v /var/lib/zigbee2mqtt:/app/data \
+  -v /run/mosquitto:/run/mosquitto \
+  --network host \
+  koenkk/zigbee2mqtt:latest
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start
+systemctl daemon-reload
+systemctl enable --now zigbee2mqtt
+```
+
+### Adding MQTT Broker (Mosquitto)
+
+```bash
+# Install Mosquitto
+dnf install mosquitto mosquitto-clients
+
+# Create configuration
+cat > /etc/mosquitto/mosquitto.conf << 'EOF'
+listener 1883
+allow_anonymous true
+persistence true
+persistence_location /var/lib/mosquitto/
+log_dest file /var/log/mosquitto/mosquitto.log
+EOF
+
+# Start and enable
+systemctl enable --now mosquitto
+
+# Test MQTT
+mosquitto_pub -h localhost -t "test/topic" -m "Hello MQTT"
+mosquitto_sub -h localhost -t "test/topic"
+```
+
+### Adding InfluxDB for Data Logging
+
+```bash
+# Create InfluxDB service
+cat > /etc/systemd/system/influxdb.service << 'EOF'
+[Unit]
+Description=InfluxDB
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --rm --name influxdb \
+  -p 8086:8086 \
+  -v /var/lib/influxdb:/var/lib/influxdb2 \
+  -v /var/lib/influxdb/config:/etc/influxdb2 \
+  -e DOCKER_INFLUXDB_INIT_MODE=setup \
+  -e DOCKER_INFLUXDB_INIT_USERNAME=admin \
+  -e DOCKER_INFLUXDB_INIT_PASSWORD=password123 \
+  -e DOCKER_INFLUXDB_INIT_ORG=homeassistant \
+  -e DOCKER_INFLUXDB_INIT_BUCKET=homeassistant \
+  influxdb:2.7
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start
+systemctl daemon-reload
+systemctl enable --now influxdb
+```
+
+### Adding Grafana for Visualization
+
+```bash
+# Create Grafana service
+cat > /etc/systemd/system/grafana.service << 'EOF'
+[Unit]
+Description=Grafana
+After=network.target influxdb.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --rm --name grafana \
+  -p 3000:3000 \
+  -v /var/lib/grafana:/var/lib/grafana \
+  -e GF_SECURITY_ADMIN_PASSWORD=admin123 \
+  grafana/grafana:latest
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start
+systemctl daemon-reload
+systemctl enable --now grafana
+```
 
 ### Custom Home Assistant Configuration
-To customize Home Assistant settings, modify the environment file:
 
+#### Environment Variables
 ```bash
 # Edit the environment template
 vim ansible/roles/homeassistant.bootstrap/templates/home-assistant.env.j2
@@ -361,29 +580,392 @@ vim ansible/roles/homeassistant.bootstrap/templates/home-assistant.env.j2
 # Add custom environment variables
 HA_IMAGE=ghcr.io/home-assistant/home-assistant:stable
 CUSTOM_COMPONENTS_DIR=/var/lib/home-assistant/custom_components
+TZ=America/New_York
 ```
 
-### Adding Custom Components
-1. Create a custom components directory:
+#### Custom Components
 ```bash
+# Create custom components directory
 mkdir -p /var/lib/home-assistant/custom_components
+
+# Example: Install HACS (Home Assistant Community Store)
+cd /var/lib/home-assistant/custom_components
+git clone https://github.com/hacs/integration.git hacs
+
+# Update systemd service to mount custom components
+vim containers-systemd/home-assistant.service
+# Add: --volume /var/lib/home-assistant/custom_components:/config/custom_components:Z \
 ```
 
-2. Mount it in the systemd service:
+#### Network Configuration
 ```bash
-# Edit containers-systemd/home-assistant.service
---volume /var/lib/home-assistant/custom_components:/config/custom_components:Z \
-```
-
-### Network Configuration
-The default configuration uses host networking. To use a custom network:
-
-```bash
-# Create a custom network
-podman network create hass-net
+# Create a custom network for better isolation
+podman network create hass-net --subnet=172.20.0.0/16
 
 # Modify the systemd service to use the network
---network hass-net \
+vim containers-systemd/home-assistant.service
+# Add: --network hass-net \
+```
+
+### Hardware Integration Examples
+
+#### GPIO Access (Raspberry Pi)
+```bash
+# Add GPIO device access to Home Assistant service
+--device=/dev/gpiomem:/dev/gpiomem \
+--device=/dev/mem:/dev/mem \
+--cap-add=SYS_RAWIO \
+```
+
+#### Camera Integration
+```bash
+# For USB cameras
+--device=/dev/video0:/dev/video0 \
+
+# For CSI cameras (Raspberry Pi)
+--device=/dev/vchiq:/dev/vchiq \
+```
+
+#### Serial Devices
+```bash
+# For serial communication (e.g., ESPHome devices)
+--device=/dev/ttyUSB0:/dev/ttyUSB0 \
+--device=/dev/ttyACM0:/dev/ttyACM0 \
+```
+
+### Service Management
+
+#### View All Services
+```bash
+# List all Home Assistant related services
+systemctl list-units --type=service | grep -E "(home-assistant|zigbee|mqtt|influx|grafana)"
+
+# Check service status
+systemctl status home-assistant
+systemctl status zigbee2mqtt
+systemctl status mosquitto
+```
+
+#### Logs and Debugging
+```bash
+# View Home Assistant logs
+journalctl -u home-assistant -f
+
+# View specific service logs
+journalctl -u zigbee2mqtt -f
+journalctl -u mosquitto -f
+
+# Check container logs
+podman logs home-assistant
+podman logs zigbee2mqtt
+```
+
+#### Restart Services
+```bash
+# Restart Home Assistant
+systemctl restart home-assistant
+
+# Restart all related services
+systemctl restart home-assistant zigbee2mqtt mosquitto influxdb grafana
+```
+
+### Automated Add-on Deployment with Ansible
+
+For production deployments, automate add-on installation using Ansible roles:
+
+#### Create ZeroTier Role
+```bash
+# Create role structure
+mkdir -p ansible/roles/zerotier/{tasks,handlers,templates,vars}
+
+# Create main task file
+cat > ansible/roles/zerotier/tasks/main.yml << 'EOF'
+---
+- name: Install ZeroTier
+  dnf:
+    name: zerotier-one
+    state: present
+
+- name: Start and enable ZeroTier
+  systemd:
+    name: zerotier-one
+    state: started
+    enabled: yes
+
+- name: Join ZeroTier network
+  command: zerotier-cli join {{ zerotier_network_id }}
+  register: join_result
+  failed_when: join_result.rc != 0 and "already a member" not in join_result.stderr
+EOF
+
+# Create variables file
+cat > ansible/roles/zerotier/vars/main.yml << 'EOF'
+---
+zerotier_network_id: "YOUR_NETWORK_ID"
+EOF
+```
+
+#### Create Zigbee2MQTT Role
+```bash
+# Create role structure
+mkdir -p ansible/roles/zigbee2mqtt/{tasks,handlers,templates,vars}
+
+# Create main task file
+cat > ansible/roles/zigbee2mqtt/tasks/main.yml << 'EOF'
+---
+- name: Create Zigbee2MQTT data directory
+  file:
+    path: /var/lib/zigbee2mqtt
+    state: directory
+    mode: '0755'
+
+- name: Create Zigbee2MQTT systemd service
+  template:
+    src: zigbee2mqtt.service.j2
+    dest: /etc/systemd/system/zigbee2mqtt.service
+  notify: reload systemd
+
+- name: Enable and start Zigbee2MQTT
+  systemd:
+    name: zigbee2mqtt
+    state: started
+    enabled: yes
+    daemon_reload: yes
+EOF
+
+# Create service template
+cat > ansible/roles/zigbee2mqtt/templates/zigbee2mqtt.service.j2 << 'EOF'
+[Unit]
+Description=Zigbee2MQTT
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --rm --name zigbee2mqtt \
+  --device={{ zigbee_device }} \
+  -v /var/lib/zigbee2mqtt:/app/data \
+  --network host \
+  koenkk/zigbee2mqtt:latest
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Create handlers
+cat > ansible/roles/zigbee2mqtt/handlers/main.yml << 'EOF'
+---
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+EOF
+
+# Create variables
+cat > ansible/roles/zigbee2mqtt/vars/main.yml << 'EOF'
+---
+zigbee_device: "/dev/ttyACM0"
+EOF
+```
+
+#### Update Main Playbook
+```bash
+# Add roles to main playbook
+vim ansible/playbooks/site.yml
+
+# Add these lines:
+- hosts: localhost
+  become: yes
+  roles:
+    - homeassistant.bootstrap
+    - zerotier
+    - zigbee2mqtt
+    - mosquitto
+    - influxdb
+    - grafana
+```
+
+### Complete Add-on Stack Example
+
+Here's a complete example of setting up a full Home Assistant stack with all common add-ons:
+
+```bash
+# Create a comprehensive playbook
+cat > ansible/playbooks/full-stack.yml << 'EOF'
+---
+- hosts: localhost
+  become: yes
+  vars:
+    # ZeroTier configuration
+    zerotier_network_id: "YOUR_NETWORK_ID"
+    
+    # Zigbee configuration
+    zigbee_device: "/dev/ttyACM0"
+    
+    # MQTT configuration
+    mqtt_username: "homeassistant"
+    mqtt_password: "secure_password"
+    
+    # InfluxDB configuration
+    influxdb_admin_user: "admin"
+    influxdb_admin_password: "secure_password"
+    influxdb_org: "homeassistant"
+    influxdb_bucket: "homeassistant"
+    
+    # Grafana configuration
+    grafana_admin_password: "secure_password"
+
+  tasks:
+    # Install system packages
+    - name: Install system packages
+      dnf:
+        name:
+          - mosquitto
+          - mosquitto-clients
+          - zerotier-one
+        state: present
+
+    # Create directories
+    - name: Create data directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /var/lib/zigbee2mqtt
+        - /var/lib/influxdb
+        - /var/lib/grafana
+        - /var/lib/zerotier-one
+
+    # Configure and start services
+    - name: Start and enable Mosquitto
+      systemd:
+        name: mosquitto
+        state: started
+        enabled: yes
+
+    - name: Start and enable ZeroTier
+      systemd:
+        name: zerotier-one
+        state: started
+        enabled: yes
+
+    # Deploy container services
+    - name: Deploy Zigbee2MQTT service
+      template:
+        src: zigbee2mqtt.service.j2
+        dest: /etc/systemd/system/zigbee2mqtt.service
+      notify: reload systemd
+
+    - name: Deploy InfluxDB service
+      template:
+        src: influxdb.service.j2
+        dest: /etc/systemd/system/influxdb.service
+      notify: reload systemd
+
+    - name: Deploy Grafana service
+      template:
+        src: grafana.service.j2
+        dest: /etc/systemd/system/grafana.service
+      notify: reload systemd
+
+    # Enable container services
+    - name: Enable container services
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      loop:
+        - zigbee2mqtt
+        - influxdb
+        - grafana
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+EOF
+```
+
+### Quick Setup Script
+
+Create a quick setup script for common configurations:
+
+```bash
+# Create setup script
+cat > setup-addons.sh << 'EOF'
+#!/bin/bash
+
+# HassOS-Bootc Add-on Setup Script
+set -e
+
+echo "🏠 HassOS-Bootc Add-on Setup"
+echo "============================="
+
+# Function to install add-on
+install_addon() {
+    local addon=$1
+    echo "Installing $addon..."
+    
+    case $addon in
+        "zerotier")
+            dnf install -y zerotier-one
+            systemctl enable --now zerotier-one
+            echo "ZeroTier installed. Run 'zerotier-cli join YOUR_NETWORK_ID' to join a network."
+            ;;
+        "mqtt")
+            dnf install -y mosquitto mosquitto-clients
+            systemctl enable --now mosquitto
+            echo "Mosquitto MQTT broker installed and started."
+            ;;
+        "zigbee2mqtt")
+            ./setup-zigbee2mqtt.sh
+            ;;
+        "influxdb")
+            ./setup-influxdb.sh
+            ;;
+        "grafana")
+            ./setup-grafana.sh
+            ;;
+        *)
+            echo "Unknown add-on: $addon"
+            exit 1
+            ;;
+    esac
+}
+
+# Main menu
+echo "Available add-ons:"
+echo "1. ZeroTier VPN"
+echo "2. MQTT Broker (Mosquitto)"
+echo "3. Zigbee2MQTT"
+echo "4. InfluxDB"
+echo "5. Grafana"
+echo "6. All add-ons"
+
+read -p "Select add-on (1-6): " choice
+
+case $choice in
+    1) install_addon "zerotier" ;;
+    2) install_addon "mqtt" ;;
+    3) install_addon "zigbee2mqtt" ;;
+    4) install_addon "influxdb" ;;
+    5) install_addon "grafana" ;;
+    6) 
+        install_addon "zerotier"
+        install_addon "mqtt"
+        install_addon "zigbee2mqtt"
+        install_addon "influxdb"
+        install_addon "grafana"
+        ;;
+    *) echo "Invalid choice" && exit 1 ;;
+esac
+
+echo "✅ Setup complete!"
+EOF
+
+chmod +x setup-addons.sh
 ```
 
 ## Day 2 Operations
